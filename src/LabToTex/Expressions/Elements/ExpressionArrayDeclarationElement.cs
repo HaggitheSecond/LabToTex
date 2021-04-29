@@ -11,7 +11,8 @@ namespace LabToTex.Expressions.Elements
         {
             var elements = new List<ExpressionElement>();
 
-            elements.AddRange(this.Elements);
+            if (this.Elements != null)
+                elements.AddRange(this.Elements);
 
             return elements;
         }

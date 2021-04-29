@@ -17,6 +17,6 @@ namespace LabToTex.Expressions.Elements
     public class ArrayIndex
     {
         public int XIndex { get; set; }
-        public int YIndex { get; set; }
+        public int? YIndex { get; set; }
     }
 }

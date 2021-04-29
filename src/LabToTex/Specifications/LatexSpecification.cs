@@ -11,6 +11,8 @@ namespace LabToTex.Specifications
 
         public string DesieredMatrixType { get; set; } = @"bmatrix";
 
+        public string DesiredMultiplication { get; set; } = @"\cdot";
+
         public List<string> SpecialChars { get; set; } = new List<string>
         {
             "alpha",

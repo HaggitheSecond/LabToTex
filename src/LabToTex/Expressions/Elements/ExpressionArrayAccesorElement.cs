@@ -1,7 +1,16 @@
-﻿namespace LabToTex.Expressions.Elements
+﻿using System.Collections.Generic;
+
+namespace LabToTex.Expressions.Elements
 {
     public class ExpressionArrayAccesorElement : ExpressionElement
     {
+        public ExpressionVariableElement Name { get; set; }
 
+        public ArrayIndex Index { get; set; }
+
+        public override IEnumerable<ExpressionElement> GetChildren()
+        {
+            yield return this.Name;
+        }
     }
 }

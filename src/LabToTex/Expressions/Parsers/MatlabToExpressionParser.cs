@@ -325,9 +325,27 @@ namespace LabToTex.Expressions.Parsers
                             }
                             else
                             {
+                                var xIndex = 0;
+                                var xIndexElement = innerElements.ElementAtOrDefault(0);
+
+                                if (xIndexElement != null && int.TryParse(xIndexElement.RawValue, out var xIndexOut))
+                                    xIndex = xIndexOut;
+
+                                int? yIndex = null;
+                                var yIndexElement = innerElements.ElementAtOrDefault(1);
+
+                                if (yIndexElement != null && int.TryParse(yIndexElement.RawValue, out var yIndexOut))
+                                    yIndex = yIndexOut;
+
                                 innerExpression = new ExpressionArrayAccesorElement()
                                 {
-                                    RawValue = $"{previousElement}({string.Join(",", innerElements)})"
+                                    RawValue = $"{previousElement}({string.Join(",", innerElements)})",
+                                    Name = previousElement as ExpressionVariableElement,
+                                    Index = new ArrayIndex
+                                    {
+                                        XIndex = xIndex,
+                                        YIndex = yIndex
+                                    }
                                 };
 
                                 workInProgressExpressionParts.Remove(previousElement);
@@ -387,14 +405,9 @@ namespace LabToTex.Expressions.Parsers
                             var element1 = workInProgressExpressionParts.ElementAtOrDefault(i - 1);
                             var element2 = workInProgressExpressionParts.ElementAtOrDefault(i + 1);
 
-                            if (element1 != null)
-                                element1.Parent = currentElement;
-                            if (element2 != null)
-                                element2.Parent = currentElement;
-
-                            if (MatlabSpecification.CanBinaryOperatorBeUsedAsUnary(operatorExpression.Operator) &&
-                                (element1 == null || element1 is ExpressionOperatorElement))
+                            if (false)
                             {
+                                // fuck unary operators
                                 operatorExpression.Operand1 = element2;
                                 operatorExpression.IsUnary = true;
                                 workInProgressExpressionParts.Remove(operatorExpression.Operand1);

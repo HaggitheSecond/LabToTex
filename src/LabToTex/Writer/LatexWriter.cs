@@ -63,12 +63,26 @@ namespace LabToTex.Writer
                     text = this.WriteArrayDeclarationElement(arrayDeclarationElement, specification);
                     break;
 
+                case ExpressionArrayAccesorElement arrayAccesorElement:
+                    text = this.WriteArrayAccessorElement(arrayAccesorElement, specification);
+                    break;
+
                 default:
                     text = expression.ToString();
                     break;
             }
 
             return expression.Parent == null ? $"${text}$ {specification.LineBreak}" : text;
+        }
+
+        private string WriteArrayAccessorElement(ExpressionArrayAccesorElement arrayAccesorElement, LatexSpecification specification)
+        {
+            var index = arrayAccesorElement.Index.XIndex.ToString();
+
+            if (arrayAccesorElement.Index.YIndex.HasValue)
+                index += "," + arrayAccesorElement.Index.YIndex.Value;
+
+            return $"{this.WriteExpression(arrayAccesorElement.Name, specification)}({index})";
         }
 
         private string WriteArrayDeclarationElement(ExpressionArrayDeclarationElement element, LatexSpecification specification)
@@ -106,9 +120,14 @@ namespace LabToTex.Writer
             if (element.Operator == "/")
                 return string.Format("\\frac{{{0}}}{{{1}}}", operand1, operand2);
 
+            var @operator = element.Operator;
+
+            if (@operator == "*")
+                @operator = specification.DesiredMultiplication;
+
             return element.IsUnary
-                ? $"{element.Operator}({operand1})"
-                : $"{operand1} {element.Operator} {operand2}";
+                ? $"{@operator}({operand1})"
+                : $"{operand1} {@operator} {operand2}";
         }
 
         private string WriteVariableDeclarationElement(ExpressionVariableDeclarationElement element, LatexSpecification specification)
