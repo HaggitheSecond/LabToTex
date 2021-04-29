@@ -125,9 +125,13 @@ namespace LabToTex.Writer
             if (@operator == "*")
                 @operator = specification.DesiredMultiplication;
 
-            return element.IsUnary
-                ? $"{@operator}({operand1})"
-                : $"{operand1} {@operator} {operand2}";
+            return element.Type switch
+            {
+                OperatorType.Binary => $"{operand1} {@operator} {operand2}",
+                OperatorType.Unary => $"{@operator}({operand1})",
+                OperatorType.BinaryAsUnary => $"{@operator}{operand1}",
+                _ => throw new ArgumentOutOfRangeException(),
+            };
         }
 
         private string WriteVariableDeclarationElement(ExpressionVariableDeclarationElement element, LatexSpecification specification)

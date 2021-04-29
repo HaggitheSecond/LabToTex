@@ -184,10 +184,17 @@ namespace LabToTex.Expressions.Parsers
 
                     if (MatlabSpecification.IsOperator(currentPart))
                     {
+                        OperatorType type = OperatorType.Binary;
+
+                        if (MatlabSpecification.IsUnaryOperator(currentPart))
+                            type = OperatorType.Unary;
+                        else if ( i == 0 || expressionParts.Last() is ExpressionOperatorElement)
+                            type = OperatorType.BinaryAsUnary;
+
                         element = new ExpressionOperatorElement
                         {
                             Operator = currentPart,
-                            IsUnary = MatlabSpecification.IsUnaryOperator(currentPart)
+                            Type = type
                         };
                     }
                     else if (MatlabSpecification.IsValue(currentPart))
@@ -375,11 +382,9 @@ namespace LabToTex.Expressions.Parsers
                         if (currentElement == null)
                             break;
 
-                        if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.IsUnary)
+                        if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.Type == OperatorType.Unary)
                         {
                             var element1 = workInProgressExpressionParts.ElementAt(i + 1);
-
-                            element1.Parent = currentElement;
 
                             operatorExpression.Operand1 = element1;
                             workInProgressExpressionParts.Remove(operatorExpression.Operand1);
@@ -400,16 +405,15 @@ namespace LabToTex.Expressions.Parsers
                         if (currentElement == null)
                             break;
 
-                        if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.IsUnary == false)
+                        if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.Type != OperatorType.Unary)
                         {
                             var element1 = workInProgressExpressionParts.ElementAtOrDefault(i - 1);
                             var element2 = workInProgressExpressionParts.ElementAtOrDefault(i + 1);
 
-                            if (false)
+                            if (operatorExpression.Type == OperatorType.BinaryAsUnary)
                             {
-                                // fuck unary operators
                                 operatorExpression.Operand1 = element2;
-                                operatorExpression.IsUnary = true;
+
                                 workInProgressExpressionParts.Remove(operatorExpression.Operand1);
                             }
                             else

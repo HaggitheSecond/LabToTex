@@ -33,7 +33,7 @@ namespace LabToTex
             else
             {
 
-                parser.Parse(@"C:\Users\haggi\Documents\Uni\semester 1\latex\labtotex\test01.m",
+                parser.Parse(@"C:\Users\haggi\Documents\Uni\semester 1\latex\labtotex\messtechnik_ubeung5.m",
                     @"C:\Users\haggi\Documents\Uni\semester 1\latex\labtotex\test01.tex",
                     @"C:\Users\haggi\Documents\Uni\semester 1\latex\helloworld.tex");
             }
