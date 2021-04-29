@@ -9,6 +9,8 @@ namespace LabToTex.Specifications
         public string LineBreak { get; set; } = @"\par";
         public string MediumLineBreak { get; set; } = @"\medskip";
 
+        public string DesieredMatrixType { get; set; } = @"bmatrix";
+
         public List<string> SpecialChars { get; set; } = new List<string>
         {
             "alpha",

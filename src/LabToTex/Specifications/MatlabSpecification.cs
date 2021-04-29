@@ -51,6 +51,11 @@ namespace LabToTex
             ")"
         };
 
+        public static List<string> EndStatementOperators = new List<string>
+        {
+            ";"
+        };
+
         public static bool IsOperator(string @string) => IsBinaryOperator(@string) || IsUnaryOperator(@string);
         public static bool IsBinaryOperator(string @string) => BinaryOperators.Union(DualPurposeOperators).Any(f => f == @string);
         public static bool IsUnaryOperator(string @string) => UnaryOperators.Any(f => f == @string);
@@ -61,6 +66,7 @@ namespace LabToTex
         public static bool IsArrayOperator(string @string) => ArrayDeclarationOperators.Any(f => f == @string);
         public static bool IsParenthesisOperators(string @string) => ParenthesisOperators.Any(f => f == @string);
         public static ParenthesisType GetParenthesisType(string @string) => @string == ")" ? ParenthesisType.Close : ParenthesisType.Open;
-        public static bool IsKeyWord(string @string) => IsOperator(@string) || IsAssignmentOperator(@string) || IsArrayOperator(@string) || IsParenthesisOperators(@string);
+        public static bool IsKeyWord(string @string) => IsOperator(@string) || IsAssignmentOperator(@string) || IsArrayOperator(@string) || IsParenthesisOperators(@string) || IsEndStatement(@string);
+        public static bool IsEndStatement(string @string) => EndStatementOperators.Any(f => f == @string);
     }
 }

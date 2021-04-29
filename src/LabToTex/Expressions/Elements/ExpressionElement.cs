@@ -1,4 +1,6 @@
-﻿namespace LabToTex.Expressions.Elements
+﻿using System.Collections.Generic;
+
+namespace LabToTex.Expressions.Elements
 {
     public class ExpressionElement
     {
@@ -7,6 +9,11 @@
         public bool IsSealed { get; set; }
 
         public ExpressionElement Parent { get; set; }
+
+        public virtual IEnumerable<ExpressionElement> GetChildren()
+        {
+            return new List<ExpressionElement>();
+        }
 
         public override string ToString()
         {

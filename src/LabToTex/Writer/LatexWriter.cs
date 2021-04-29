@@ -73,7 +73,24 @@ namespace LabToTex.Writer
 
         private string WriteArrayDeclarationElement(ExpressionArrayDeclarationElement element, LatexSpecification specification)
         {
-            return $"{this.WriteExpression(element.Name, specification)} = novaluesyset";
+            var dimensions = element.Elements.Select(f => f.Index.YIndex).Distinct().Count();
+
+            var output = @"\begin{" + specification.DesieredMatrixType + "}";
+
+            if (dimensions == 1)
+            {
+                output += string.Join("&", element.Elements.Select(f => this.WriteExpression(f, specification)));
+            }
+            else
+            {
+                for (int i = 0; i < dimensions; i++)
+                {
+                    var parts = element.Elements.Where(f => f.Index.YIndex == i);
+                    output += string.Join("&", parts.Select(f => this.WriteExpression(f, specification))) + @"\\";
+                }
+            }
+
+            return output += @"\end{" + specification.DesieredMatrixType + "}";
         }
 
         private string WriteValueElement(ExpressionValueElement valueElement, LatexSpecification specification)

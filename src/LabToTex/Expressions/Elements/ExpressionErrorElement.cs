@@ -10,7 +10,12 @@ namespace LabToTex.Expressions.Elements
 
         public override string ToString()
         {
-            return string.Join(" ", this.Children) + " -- Exception: " + this.Exception.Message;
+            return base.ToString() + " -- Exception: " + this.Exception.Message;
+        }
+
+        public override IEnumerable<ExpressionElement> GetChildren()
+        {
+            return this.Children;
         }
     }
 }

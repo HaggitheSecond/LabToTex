@@ -99,50 +99,75 @@ namespace LabToTex.Expressions.Parsers
 
         private ExpressionElement ParseLine(Line line)
         {
+            ExpressionElement element;
+
             var parts = this.ExtractLineParts(line.Value);
 
             if (parts.Any() == false)
-                return new ExpressionEmptyElement()
-                {
-                    LineReference = line.Index
-                };
-
-            var expressionParts = this.ParseExpressionElements(parts, line.Index);
-
-            if (expressionParts.Count == 1)
-                return new ExpressionElement
-                {
-                    LineReference = line.Index,
-                    RawValue = expressionParts.First().RawValue
-                };
-
-            if (expressionParts[0] is ExpressionVariableElement variableElement && expressionParts[1] is ExpressionAssignmentOperatorElement)
             {
-                var variableDeclaration = new ExpressionVariableDeclarationElement
+                element = new ExpressionEmptyElement();
+            }
+            else
+            {
+                var expressionParts = this.ParseExpressionElements(parts);
+
+                if (expressionParts.Last() is ExpressionEndStatementElement)
+                    expressionParts.Remove(expressionParts.Last());
+
+                if (expressionParts.Count == 1)
                 {
-                    LineReference = line.Index,
-                    Name = variableElement,
-                    RawValue = line.Value
-                };
+                    element = new ExpressionElement
+                    {
+                        RawValue = expressionParts.First().RawValue
+                    };
+                }
+                else if (expressionParts[0] is ExpressionVariableElement variableElement && expressionParts[1] is ExpressionAssignmentOperatorElement)
+                {
+                    var variableDeclaration = new ExpressionVariableDeclarationElement
+                    {
+                        Name = variableElement,
+                        RawValue = line.Value
+                    };
 
-                variableElement.Parent = variableDeclaration;
+                    variableElement.Parent = variableDeclaration;
 
-                if (expressionParts[2] is ExpressionArrayDeclarationElement)
-                    variableDeclaration.ValueExpression = this.ParseArrayDeclaration(expressionParts.Skip(2).ToList(), variableDeclaration);
+                    if (expressionParts[2] is ExpressionArrayDeclarationElement)
+                        variableDeclaration.ValueExpression = this.ParseArrayDeclaration(expressionParts.Skip(2).ToList());
+                    else
+                        variableDeclaration.ValueExpression = this.ParseTerm(expressionParts.Skip(2).ToList());
+
+                    element = variableDeclaration;
+                }
                 else
-                    variableDeclaration.ValueExpression = this.ParseTerm(expressionParts.Skip(2).ToList(), variableDeclaration);
-
-                return variableDeclaration;
+                {
+                    element = new ExpressionElement
+                    {
+                        RawValue = string.Join(" ", expressionParts.Select(f => f.RawValue))
+                    };
+                }
             }
 
-            return new ExpressionElement
-            {
-                LineReference = line.Index,
-                RawValue = string.Join(" ", expressionParts.Select(f => f.RawValue))
-            };
+            this.SetParentAndLineReference(element, line.Index);
+            return element;
         }
 
-        private IList<ExpressionElement> ParseExpressionElements(IList<string> parts, int index)
+        private void SetParentAndLineReference(ExpressionElement element, int lineReference, ExpressionElement parent = null)
+        {
+            if (element == null)
+                return;
+
+            if (parent != null)
+                element.Parent = parent;
+
+            element.LineReference = lineReference;
+
+            foreach (var currentChild in element.GetChildren())
+            {
+                this.SetParentAndLineReference(currentChild, lineReference, element);
+            }
+        }
+
+        private IList<ExpressionElement> ParseExpressionElements(IList<string> parts)
         {
             var expressionParts = new List<ExpressionElement>();
 
@@ -194,12 +219,15 @@ namespace LabToTex.Expressions.Parsers
                             Type = MatlabSpecification.GetParenthesisType(currentPart)
                         };
                     }
+                    else if (MatlabSpecification.IsEndStatement(currentPart))
+                    {
+                        element = new ExpressionEndStatementElement();
+                    }
                     else
                     {
                         throw new Exception($"Could not parse value '{currentPart}'");
                     }
 
-                    element.LineReference = index;
                     element.RawValue = currentPart;
 
                     expressionParts.Add(element);
@@ -208,7 +236,6 @@ namespace LabToTex.Expressions.Parsers
                 {
                     expressionParts.Add(new ExpressionErrorElement
                     {
-                        LineReference = index,
                         Exception = e,
                         RawValue = currentPart
                     });
@@ -218,16 +245,49 @@ namespace LabToTex.Expressions.Parsers
             return expressionParts;
         }
 
-        private ExpressionElement ParseArrayDeclaration(IList<ExpressionElement> expressionParts, ExpressionElement parent)
+        private ExpressionElement ParseArrayDeclaration(IList<ExpressionElement> expressionParts)
         {
+            expressionParts.RemoveAt(0);
+            expressionParts.RemoveAt(expressionParts.Count - 1);
+
+            var elements = new List<ExpressionArrayElementElement>();
+
+            var currentYDimension = 0;
+            var currentXDimension = 0;
+
+            for (int i = 0; i < expressionParts.Count; i++)
+            {
+                var currentElement = expressionParts[i];
+
+                if (currentElement is ExpressionEndStatementElement)
+                {
+                    currentXDimension = 0;
+                    currentYDimension++;
+                }
+                else
+                {
+                    currentXDimension++;
+                    elements.Add(new ExpressionArrayElementElement
+                    {
+                        Index = new ArrayIndex
+                        {
+                            XIndex = currentXDimension,
+                            YIndex = currentYDimension
+                        },
+                        Value = currentElement,
+                        RawValue = currentElement.RawValue
+                    });
+                }
+            }
+
             return new ExpressionArrayDeclarationElement
             {
                 RawValue = string.Join(", ", expressionParts),
-                Parent = parent
+                Elements = elements
             };
         }
 
-        private ExpressionElement ParseTerm(IList<ExpressionElement> expressionParts, ExpressionElement parent)
+        private ExpressionElement ParseTerm(IList<ExpressionElement> expressionParts)
         {
             try
             {
@@ -261,13 +321,12 @@ namespace LabToTex.Expressions.Parsers
 
                             if (previousElement == null || !(previousElement is ExpressionVariableElement))
                             {
-                                innerExpression = this.ParseTerm(innerElements, currentElement);
+                                innerExpression = this.ParseTerm(innerElements);
                             }
                             else
                             {
                                 innerExpression = new ExpressionArrayAccesorElement()
                                 {
-                                    LineReference = previousElement.LineReference,
                                     RawValue = $"{previousElement}({string.Join(",", innerElements)})"
                                 };
 
@@ -361,8 +420,6 @@ namespace LabToTex.Expressions.Parsers
                     element = workInProgressExpressionParts.First();
                 }
 
-                element.Parent = parent;
-
                 return element;
             }
             catch (Exception e)
@@ -370,9 +427,7 @@ namespace LabToTex.Expressions.Parsers
                 return new ExpressionErrorElement()
                 {
                     Exception = e,
-                    Children = expressionParts.ToList(),
-                    LineReference = expressionParts.First().LineReference,
-                    Parent = parent
+                    Children = expressionParts.ToList()
                 };
             }
         }

@@ -2,6 +2,6 @@
 {
     public class ExpressionArrayAccesorElement : ExpressionElement
     {
-        public ExpressionArrayDeclarationElement Parent { get; set; }
+
     }
 }
