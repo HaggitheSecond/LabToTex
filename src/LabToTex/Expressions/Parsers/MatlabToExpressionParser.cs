@@ -68,6 +68,35 @@ namespace LabToTex.Expressions.Parsers
             public int Index { get; set; }
         }
 
+        private IList<string> ExtractLineParts(string line)
+        {
+            var parts = new List<string>();
+
+            var i = 0;
+            while (i < line.Length)
+            {
+                var currentChar = line[i];
+
+                if (char.IsLetterOrDigit(currentChar))
+                {
+                    var wholethingy = string.Join("", line[i..].TakeWhile(f => char.IsLetterOrDigit(f) || f == '.' || f == '_'));
+                    i += wholethingy.Length;
+                    parts.Add(wholethingy);
+                    continue;
+                }
+
+                if (MatlabSpecification.IsKeyWord(currentChar.ToString()))
+                    parts.Add(currentChar.ToString());
+
+                if (currentChar == '%')
+                    break;
+
+                i++;
+            }
+
+            return parts.Where(f => string.IsNullOrWhiteSpace(f) == false).ToList();
+        }
+
         private ExpressionElement ParseLine(Line line)
         {
             var parts = this.ExtractLineParts(line.Value);
@@ -93,16 +122,15 @@ namespace LabToTex.Expressions.Parsers
                 {
                     LineReference = line.Index,
                     Name = variableElement,
-                    RawValue = line.Value,
+                    RawValue = line.Value
                 };
 
-                if (expressionParts[2] is ExpressionArrayOperatorElement)
-                    variableDeclaration.ValueExpression = new ExpressionArrayOperatorElement
-                    {
-                        RawValue = string.Join(" ", expressionParts.Skip(2))
-                    };
+                variableElement.Parent = variableDeclaration;
+
+                if (expressionParts[2] is ExpressionArrayDeclarationElement)
+                    variableDeclaration.ValueExpression = this.ParseArrayDeclaration(expressionParts.Skip(2).ToList(), variableDeclaration);
                 else
-                    variableDeclaration.ValueExpression = this.ParseTerm(expressionParts.Skip(2).ToList());
+                    variableDeclaration.ValueExpression = this.ParseTerm(expressionParts.Skip(2).ToList(), variableDeclaration);
 
                 return variableDeclaration;
             }
@@ -157,7 +185,7 @@ namespace LabToTex.Expressions.Parsers
                     }
                     else if (MatlabSpecification.IsArrayOperator(currentPart))
                     {
-                        element = new ExpressionArrayOperatorElement();
+                        element = new ExpressionArrayDeclarationElement();
                     }
                     else if (MatlabSpecification.IsParenthesisOperators(currentPart))
                     {
@@ -190,123 +218,152 @@ namespace LabToTex.Expressions.Parsers
             return expressionParts;
         }
 
-        private ExpressionElement ParseTerm(IList<ExpressionElement> expressionParts)
+        private ExpressionElement ParseArrayDeclaration(IList<ExpressionElement> expressionParts, ExpressionElement parent)
         {
-            if (expressionParts.Count == 1 && (expressionParts[0] is ExpressionValueElement || expressionParts[0] is ExpressionVariableElement))
-                return expressionParts.First();
+            return new ExpressionArrayDeclarationElement
+            {
+                RawValue = string.Join(", ", expressionParts),
+                Parent = parent
+            };
+        }
 
+        private ExpressionElement ParseTerm(IList<ExpressionElement> expressionParts, ExpressionElement parent)
+        {
             try
             {
-                var actual = expressionParts.ToList();
+                ExpressionElement element;
 
-                // first pass
-                // collapse paranthesis
-                var i = 0;
-                while (true)
+                if (expressionParts.Count == 1 && (expressionParts[0] is ExpressionValueElement || expressionParts[0] is ExpressionVariableElement))
                 {
-                    var current = actual.ElementAtOrDefault(i);
+                    element = expressionParts.First();
+                }
+                else
+                {
+                    var workInProgressExpressionParts = expressionParts.ToList();
 
-                    if (current == null)
-                        break;
-
-                    if (current is ExpressionParenthesisElement paranthesisElement)
+                    // first pass
+                    // collapse paranthesis
+                    var i = 0;
+                    while (true)
                     {
-                        var closingParenthesis = this.FindClosingParenthesis(actual.Skip(i).ToList());
-                        var innerElements = actual.Skip(i + 1).TakeWhile(f => object.ReferenceEquals(f, closingParenthesis) == false).ToList();
+                        var currentElement = workInProgressExpressionParts.ElementAtOrDefault(i);
 
-                        var previousElement = actual.ElementAtOrDefault(i - 1);
-                        ExpressionElement innerExpression;
+                        if (currentElement == null)
+                            break;
 
-                        if (previousElement == null || !(previousElement is ExpressionVariableElement))
+                        if (currentElement is ExpressionParenthesisElement paranthesisElement)
                         {
-                            innerExpression = this.ParseTerm(innerElements);
-                        }
-                        else
-                        {
-                            innerExpression = new ExpressionArrayAccesorElement()
+                            var closingParenthesis = this.FindClosingParenthesis(workInProgressExpressionParts.Skip(i).ToList());
+                            var innerElements = workInProgressExpressionParts.Skip(i + 1).TakeWhile(f => object.ReferenceEquals(f, closingParenthesis) == false).ToList();
+
+                            var previousElement = workInProgressExpressionParts.ElementAtOrDefault(i - 1);
+                            ExpressionElement innerExpression;
+
+                            if (previousElement == null || !(previousElement is ExpressionVariableElement))
                             {
-                                LineReference = previousElement.LineReference,
-                                RawValue = $"{previousElement}({string.Join(",", innerElements)})"
-                            };
+                                innerExpression = this.ParseTerm(innerElements, currentElement);
+                            }
+                            else
+                            {
+                                innerExpression = new ExpressionArrayAccesorElement()
+                                {
+                                    LineReference = previousElement.LineReference,
+                                    RawValue = $"{previousElement}({string.Join(",", innerElements)})"
+                                };
 
-                            actual.Remove(previousElement);
-                            i--;
+                                workInProgressExpressionParts.Remove(previousElement);
+                                i--;
+                            }
+
+                            workInProgressExpressionParts.Remove(paranthesisElement);
+
+                            foreach (var currentInnerElement in innerElements)
+                                workInProgressExpressionParts.Remove(currentInnerElement);
+
+                            workInProgressExpressionParts.Remove(closingParenthesis);
+
+                            workInProgressExpressionParts.Insert(i, innerExpression);
                         }
 
-                        actual.Remove(paranthesisElement);
-
-                        foreach (var currentInnerElement in innerElements)
-                            actual.Remove(currentInnerElement);
-
-                        actual.Remove(closingParenthesis);
-
-                        actual.Insert(i, innerExpression);
+                        i++;
                     }
 
-                    i++;
-                }
-
-                // second pass 
-                // handle unary operators
-                i = 0;
-                while (true)
-                {
-                    var current = actual.ElementAtOrDefault(i);
-
-                    if (current == null)
-                        break;
-
-                    if (current is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.IsUnary)
+                    // second pass 
+                    // handle unary operators
+                    i = 0;
+                    while (true)
                     {
-                        var element2 = actual.ElementAt(i + 1);
-                        operatorExpression.Operand1 = element2;
-                        actual.Remove(operatorExpression.Operand1);
+                        var currentElement = workInProgressExpressionParts.ElementAtOrDefault(i);
 
-                        operatorExpression.IsSealed = true;
-                    }
+                        if (currentElement == null)
+                            break;
 
-                    i++;
-                }
-
-                // third pass 
-                // handle binary operators
-                i = actual.Count - 1;
-                while (true)
-                {
-                    var current = actual.ElementAtOrDefault(i);
-
-                    if (current == null)
-                        break;
-
-                    if (current is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.IsUnary == false)
-                    {
-                        var element1 = actual.ElementAtOrDefault(i - 1);
-                        var element2 = actual.ElementAtOrDefault(i + 1);
-
-                        if (MatlabSpecification.CanBinaryOperatorBeUsedAsUnary(operatorExpression.Operator) &&
-                            (element1 == null || element1 is ExpressionOperatorElement))
+                        if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.IsUnary)
                         {
-                            operatorExpression.Operand1 = element2;
-                            operatorExpression.IsUnary = true;
-                            actual.Remove(operatorExpression.Operand1);
-                        }
-                        else
-                        {
+                            var element1 = workInProgressExpressionParts.ElementAt(i + 1);
+
+                            element1.Parent = currentElement;
+
                             operatorExpression.Operand1 = element1;
-                            operatorExpression.Operand2 = element2;
+                            workInProgressExpressionParts.Remove(operatorExpression.Operand1);
 
-                            actual.Remove(operatorExpression.Operand1);
-                            actual.Remove(operatorExpression.Operand2);
+                            operatorExpression.IsSealed = true;
                         }
 
-                        operatorExpression.IsSealed = true;
+                        i++;
                     }
 
-                    i--;
+                    // third pass 
+                    // handle binary operators
+                    i = workInProgressExpressionParts.Count - 1;
+                    while (true)
+                    {
+                        var currentElement = workInProgressExpressionParts.ElementAtOrDefault(i);
+
+                        if (currentElement == null)
+                            break;
+
+                        if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.IsUnary == false)
+                        {
+                            var element1 = workInProgressExpressionParts.ElementAtOrDefault(i - 1);
+                            var element2 = workInProgressExpressionParts.ElementAtOrDefault(i + 1);
+
+                            if (element1 != null)
+                                element1.Parent = currentElement;
+                            if (element2 != null)
+                                element2.Parent = currentElement;
+
+                            if (MatlabSpecification.CanBinaryOperatorBeUsedAsUnary(operatorExpression.Operator) &&
+                                (element1 == null || element1 is ExpressionOperatorElement))
+                            {
+                                operatorExpression.Operand1 = element2;
+                                operatorExpression.IsUnary = true;
+                                workInProgressExpressionParts.Remove(operatorExpression.Operand1);
+                            }
+                            else
+                            {
+                                operatorExpression.Operand1 = element1;
+                                operatorExpression.Operand2 = element2;
+
+                                workInProgressExpressionParts.Remove(operatorExpression.Operand1);
+                                workInProgressExpressionParts.Remove(operatorExpression.Operand2);
+                            }
+
+                            operatorExpression.IsSealed = true;
+                        }
+
+                        i--;
+                    }
+
+                    if (workInProgressExpressionParts.Count != 1)
+                        throw new Exception("Expression could not be reduced to a single element");
+
+                    element = workInProgressExpressionParts.First();
                 }
 
-                var firstElement = actual.First();
-                return firstElement as ExpressionOperatorElement;
+                element.Parent = parent;
+
+                return element;
             }
             catch (Exception e)
             {
@@ -314,7 +371,8 @@ namespace LabToTex.Expressions.Parsers
                 {
                     Exception = e,
                     Children = expressionParts.ToList(),
-                    LineReference = expressionParts.First().LineReference
+                    LineReference = expressionParts.First().LineReference,
+                    Parent = parent
                 };
             }
         }
@@ -341,36 +399,7 @@ namespace LabToTex.Expressions.Parsers
                 }
             }
 
-            throw new ArgumentException();
-        }
-
-        private IList<string> ExtractLineParts(string line)
-        {
-            var parts = new List<string>();
-
-            var i = 0;
-            while (i < line.Length)
-            {
-                var currentChar = line[i];
-
-                if (char.IsLetterOrDigit(currentChar))
-                {
-                    var wholethingy = string.Join("", line[i..].TakeWhile(f => char.IsLetterOrDigit(f) || f == '.' || f == '_'));
-                    i += wholethingy.Length;
-                    parts.Add(wholethingy);
-                    continue;
-                }
-
-                if (MatlabSpecification.IsKeyWord(currentChar.ToString()))
-                    parts.Add(currentChar.ToString());
-
-                if (currentChar == '%')
-                    break;
-
-                i++;
-            }
-
-            return parts.Where(f => string.IsNullOrWhiteSpace(f) == false).ToList();
+            throw new ArgumentOutOfRangeException("Could not find closing paranthesis");
         }
     }
 }

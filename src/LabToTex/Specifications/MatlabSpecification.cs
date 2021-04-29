@@ -6,33 +6,10 @@ namespace LabToTex
 {
     public static class MatlabSpecification
     {
-        public static List<string> SpecialChars = new List<string>
-        {
-            "alpha",
-            "Alpha",
-
-            "Beta",
-            "beta",
-
-            "Gamma",
-            "gamma",
-
-            "Delta",
-            "delta",
-
-            "Epsilon",
-            "epsilon",
-            "varepsilon",
-
-            "Lambda",
-            "lambda",
-
-            "pi",
-            "Pi"
-        };
-
         public static List<string> UnaryOperators = new List<string>
         {
+            "abs",
+            "acos",
             "sin",
             "cos",
             "cot",

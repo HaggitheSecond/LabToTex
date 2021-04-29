@@ -1,6 +1,6 @@
 ﻿namespace LabToTex.Expressions.Elements
 {
-    public class ExpressionArrayOperatorElement : ExpressionElement
+    public class ExpressionArrayDeclarationElement : ExpressionElement
     {
         public ExpressionVariableElement Name { get; set; }
     }
