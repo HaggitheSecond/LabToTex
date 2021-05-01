@@ -1,4 +1,5 @@
-﻿using LabToTex.Expressions.Elements;
+﻿using LabToTex.Common;
+using LabToTex.Expressions.Elements;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,16 +7,20 @@ using System.Linq;
 namespace LabToTex.Expressions.Parsers
 {
 
-    public class MatlabToExpressionParser
+    public partial class MatlabToExpressionParser
     {
         public ExpressionFile ParseToExpression(List<string> rawLines)
         {
-            var specification = new MatlabSpecification();
+            var matLabSpecification = new MatlabSpecification();
+            var labToTextSpecification = new LabToTextSpecification();
 
             var lines = this.ConvertToLines(rawLines);
 
-            var (declarationLines, otherLines) = this.ExtractDeclarationLines(lines, specification);
-            var expressions = otherLines.Select(f => ParseLine(f, specification)).ToList();
+            var (declarationLines, otherLines) = this.ExtractDeclarationLines(lines, labToTextSpecification);
+            var expressions = otherLines.Select(f => ParseLine(f, matLabSpecification)).ToList();
+
+            var labToTextDeclarationParser = new LabToTextDeclarationsParser();
+            labToTextDeclarationParser.ParseDeclarations(expressions, declarationLines, labToTextSpecification);
 
             return new ExpressionFile
             {
@@ -23,7 +28,7 @@ namespace LabToTex.Expressions.Parsers
             };
         }
 
-        private (List<Line> declarationLines, List<Line> otherLines) ExtractDeclarationLines(List<Line> lines, MatlabSpecification specification)
+        private (List<Line> declarationLines, List<Line> otherLines) ExtractDeclarationLines(List<Line> lines, LabToTextSpecification specification)
         {
             int? declarationStartIndex = null;
             int? declarationsEndIndex = null;
@@ -115,17 +120,6 @@ namespace LabToTex.Expressions.Parsers
             return collapsedLines;
         }
 
-        private class Line
-        {
-            public string Value { get; set; }
-            public int Index { get; set; }
-
-            public override string ToString()
-            {
-                return $"{this.Index}: {this.Value}";
-            }
-        }
-
         private IList<string> ExtractLineParts(string line, MatlabSpecification specification)
         {
             var parts = new List<string>();
@@ -191,6 +185,8 @@ namespace LabToTex.Expressions.Parsers
 
                     if (expressionParts[2] is ExpressionArrayDeclarationElement)
                         variableDeclaration.ValueExpression = this.ParseArrayDeclaration(expressionParts.Skip(2).ToList());
+                    else if (expressionParts[2] is ExpressionAnnoynmousFunctionElement)
+                        variableDeclaration.ValueExpression = this.AnnoynmousFunction(expressionParts.Skip(2).ToList());
                     else
                         variableDeclaration.ValueExpression = this.ParseTerm(expressionParts.Skip(2).ToList());
 
@@ -288,6 +284,10 @@ namespace LabToTex.Expressions.Parsers
                     {
                         element = new ExpressionEndStatementElement();
                     }
+                    else if(specification.IsAnnoymousFunction(currentPart))
+                    {
+                        element = new ExpressionAnnoynmousFunctionElement();
+                    }
                     else
                     {
                         throw new Exception($"Could not parse value '{currentPart}'");
@@ -310,19 +310,19 @@ namespace LabToTex.Expressions.Parsers
             return expressionParts;
         }
 
-        private ExpressionElement ParseArrayDeclaration(IList<ExpressionElement> expressionParts)
+        private ExpressionElement ParseArrayDeclaration(IList<ExpressionElement> expressionElements)
         {
-            expressionParts.RemoveAt(0);
-            expressionParts.RemoveAt(expressionParts.Count - 1);
+            expressionElements.RemoveAt(0);
+            expressionElements.RemoveAt(expressionElements.Count - 1);
 
             var elements = new List<ExpressionArrayElementElement>();
 
             var currentYDimension = 0;
             var currentXDimension = 0;
 
-            for (int i = 0; i < expressionParts.Count; i++)
+            for (int i = 0; i < expressionElements.Count; i++)
             {
-                var currentElement = expressionParts[i];
+                var currentElement = expressionElements[i];
 
                 if (currentElement is ExpressionEndStatementElement)
                 {
@@ -347,10 +347,30 @@ namespace LabToTex.Expressions.Parsers
 
             return new ExpressionArrayDeclarationElement
             {
-                RawValue = string.Join(", ", expressionParts),
+                RawValue = string.Join(", ", expressionElements),
                 Elements = elements
             };
         }
+
+        private ExpressionElement AnnoynmousFunction(List<ExpressionElement> expressionElements)
+        {
+            // remove leading @ and (
+            expressionElements.RemoveAt(0);
+            expressionElements.RemoveAt(0);
+
+            var closingParenthesis = this.FindClosingParenthesis(expressionElements.ToList());
+            var innerElements = expressionElements.TakeWhile(f => object.ReferenceEquals(f, closingParenthesis) == false).ToList();
+
+            foreach (var current in innerElements)
+                expressionElements.Remove(current);
+            expressionElements.Remove(closingParenthesis);
+
+            return new ExpressionAnnoynmousFunctionElement()
+            {
+                Parameters = innerElements.OfType<ExpressionVariableElement>().ToList(),
+                Expression = this.ParseTerm(expressionElements)
+            };
+         }
 
         private ExpressionElement ParseTerm(IList<ExpressionElement> expressionParts)
         {

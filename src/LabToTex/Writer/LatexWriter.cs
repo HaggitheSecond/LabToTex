@@ -68,12 +68,21 @@ namespace LabToTex.Writer
                     text = this.WriteArrayAccessorElement(arrayAccesorElement, specification);
                     break;
 
+                case ExpressionAnnoynmousFunctionElement annoynmousFunctionElement:
+                    text = this.WriteAnnoynmousFunctionElement(annoynmousFunctionElement, specification);
+                    break;
+
                 default:
                     text = expression.ToString();
                     break;
             }
 
             return expression.Parent == null ? $"${text}$ {specification.LineBreak}" : text;
+        }
+
+        private string WriteAnnoynmousFunctionElement(ExpressionAnnoynmousFunctionElement annoynmousFunctionElement, LatexSpecification specification)
+        {
+            return $"@({string.Join(",", annoynmousFunctionElement.Parameters.Select(f => this.WriteExpression(f, specification)))}) {this.WriteExpression(annoynmousFunctionElement.Expression, specification)}";
         }
 
         private string WriteArrayAccessorElement(ExpressionArrayAccesorElement arrayAccesorElement, LatexSpecification specification)

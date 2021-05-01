@@ -1,0 +1,5 @@
+- annonymos functions
+- functions
+- declarations
+- variable values
+- comments

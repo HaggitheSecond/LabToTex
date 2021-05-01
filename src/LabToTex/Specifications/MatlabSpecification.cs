@@ -1,4 +1,5 @@
 ﻿using LabToTex.Expressions.Elements;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,8 +7,6 @@ namespace LabToTex
 {
     public class MatlabSpecification
     {
-        public string LabToTexDeclarations = "LabToTexDeclarations";
-
         public List<string> UnaryOperators = new List<string>
         {
             "abs",
@@ -58,6 +57,12 @@ namespace LabToTex
             ";"
         };
 
+
+        public List<string> AnnoymousFunctionOperators = new List<string>
+        {
+            "@"
+        };
+
         public bool IsOperator(string @string) => IsBinaryOperator(@string) || IsUnaryOperator(@string);
         public bool IsBinaryOperator(string @string) => BinaryOperators.Union(DualPurposeOperators).Any(f => f == @string);
         public bool IsUnaryOperator(string @string) => UnaryOperators.Any(f => f == @string);
@@ -68,7 +73,8 @@ namespace LabToTex
         public bool IsArrayOperator(string @string) => ArrayDeclarationOperators.Any(f => f == @string);
         public bool IsParenthesisOperators(string @string) => ParenthesisOperators.Any(f => f == @string);
         public ParenthesisType GetParenthesisType(string @string) => @string == ")" ? ParenthesisType.Close : ParenthesisType.Open;
-        public bool IsKeyWord(string @string) => IsOperator(@string) || IsAssignmentOperator(@string) || IsArrayOperator(@string) || IsParenthesisOperators(@string) || IsEndStatement(@string);
+        public bool IsKeyWord(string @string) => IsOperator(@string) || IsAssignmentOperator(@string) || IsArrayOperator(@string) || IsParenthesisOperators(@string) || IsEndStatement(@string) || IsAnnoymousFunction(@string);
         public bool IsEndStatement(string @string) => EndStatementOperators.Any(f => f == @string);
+        public bool IsAnnoymousFunction(string @string) => AnnoymousFunctionOperators.Any(f => f == @string);
     }
 }
