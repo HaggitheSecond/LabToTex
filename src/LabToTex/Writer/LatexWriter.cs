@@ -1,4 +1,5 @@
 ﻿using LabToTex.Expressions.Elements;
+using LabToTex.Expressions.Parsers;
 using LabToTex.Specifications;
 using System;
 using System.Collections.Generic;
@@ -9,13 +10,13 @@ namespace LabToTex.Writer
 {
     public class LatexWriter
     {
-        public void WriteFile(string fileName, string template, List<ExpressionElement> expressions)
+        public void WriteFile(string fileName, string template, ExpressionFile expressionFile)
         {
             var specification = new LatexSpecification();
 
             var outputLines = File.ReadAllLines(template).ToList();
 
-            outputLines.InsertRange(this.FindStartTagIndex(outputLines, specification), expressions.Select(f => this.WriteExpression(f, specification)));
+            outputLines.InsertRange(this.FindStartTagIndex(outputLines, specification), expressionFile.Expressions.Select(f => this.WriteExpression(f, specification)));
 
             File.WriteAllLines(fileName, outputLines);
         }

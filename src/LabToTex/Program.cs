@@ -11,7 +11,7 @@ namespace LabToTex
 
             var doMultiple = false;
 
-            if(doMultiple)
+            if (doMultiple)
             {
                 var directory = new DirectoryInfo(@"C:\Users\haggi\Documents\Uni\semester 1\latex\labtotexv2");
 
@@ -32,8 +32,7 @@ namespace LabToTex
             }
             else
             {
-
-                parser.Parse(@"C:\Users\haggi\Documents\Uni\semester 1\latex\labtotex\messtechnik_ubeung5.m",
+                parser.Parse(@"C:\Users\haggi\Documents\Uni\semester 1\latex\labtotex\test01.m",
                     @"C:\Users\haggi\Documents\Uni\semester 1\latex\labtotex\test01.tex",
                     @"C:\Users\haggi\Documents\Uni\semester 1\latex\helloworld.tex");
             }

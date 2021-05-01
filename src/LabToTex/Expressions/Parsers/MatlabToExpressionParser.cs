@@ -5,9 +5,62 @@ using System.Linq;
 
 namespace LabToTex.Expressions.Parsers
 {
+
     public class MatlabToExpressionParser
     {
-        public List<ExpressionElement> ParseToExpression(List<string> rawLines)
+        public ExpressionFile ParseToExpression(List<string> rawLines)
+        {
+            var specification = new MatlabSpecification();
+
+            var lines = this.ConvertToLines(rawLines);
+
+            var (declarationLines, otherLines) = this.ExtractDeclarationLines(lines, specification);
+            var expressions = otherLines.Select(f => ParseLine(f, specification)).ToList();
+
+            return new ExpressionFile
+            {
+                Expressions = expressions
+            };
+        }
+
+        private (List<Line> declarationLines, List<Line> otherLines) ExtractDeclarationLines(List<Line> lines, MatlabSpecification specification)
+        {
+            int? declarationStartIndex = null;
+            int? declarationsEndIndex = null;
+
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var currentLine = lines[i];
+
+                if (currentLine.Value == $"% begin - {specification.LabToTexDeclarations}")
+                    declarationStartIndex = i;
+
+                if (currentLine.Value == $"% end")
+                    declarationsEndIndex = i;
+            }
+
+            var actualLines = new List<Line>();
+            var declarationLines = new List<Line>();
+
+            if (declarationStartIndex.HasValue && declarationsEndIndex.HasValue)
+            {
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    if (i >= declarationStartIndex.Value && i <= declarationsEndIndex.Value)
+                        declarationLines.Add(lines[i]);
+                    else
+                        actualLines.Add(lines[i]);
+                }
+            }
+            else
+            {
+                actualLines = lines;
+            }
+
+            return (declarationLines, actualLines);
+        }
+
+        private List<Line> ConvertToLines(List<string> rawLines)
         {
             var lines = new List<Line>();
 
@@ -22,7 +75,7 @@ namespace LabToTex.Expressions.Parsers
 
             lines = this.CollapseMultiLineStatements(lines);
 
-            return lines.Select(f => ParseLine(f)).ToList();
+            return lines;
         }
 
         private List<Line> CollapseMultiLineStatements(List<Line> lines)
@@ -66,9 +119,14 @@ namespace LabToTex.Expressions.Parsers
         {
             public string Value { get; set; }
             public int Index { get; set; }
+
+            public override string ToString()
+            {
+                return $"{this.Index}: {this.Value}";
+            }
         }
 
-        private IList<string> ExtractLineParts(string line)
+        private IList<string> ExtractLineParts(string line, MatlabSpecification specification)
         {
             var parts = new List<string>();
 
@@ -85,7 +143,7 @@ namespace LabToTex.Expressions.Parsers
                     continue;
                 }
 
-                if (MatlabSpecification.IsKeyWord(currentChar.ToString()))
+                if (specification.IsKeyWord(currentChar.ToString()))
                     parts.Add(currentChar.ToString());
 
                 if (currentChar == '%')
@@ -97,11 +155,11 @@ namespace LabToTex.Expressions.Parsers
             return parts.Where(f => string.IsNullOrWhiteSpace(f) == false).ToList();
         }
 
-        private ExpressionElement ParseLine(Line line)
+        private ExpressionElement ParseLine(Line line, MatlabSpecification specification)
         {
             ExpressionElement element;
 
-            var parts = this.ExtractLineParts(line.Value);
+            var parts = this.ExtractLineParts(line.Value, specification);
 
             if (parts.Any() == false)
             {
@@ -109,7 +167,7 @@ namespace LabToTex.Expressions.Parsers
             }
             else
             {
-                var expressionParts = this.ParseExpressionElements(parts);
+                var expressionParts = this.ParseExpressionElements(parts, specification);
 
                 if (expressionParts.Last() is ExpressionEndStatementElement)
                     expressionParts.Remove(expressionParts.Last());
@@ -167,7 +225,7 @@ namespace LabToTex.Expressions.Parsers
             }
         }
 
-        private IList<ExpressionElement> ParseExpressionElements(IList<string> parts)
+        private IList<ExpressionElement> ParseExpressionElements(IList<string> parts, MatlabSpecification specification)
         {
             var expressionParts = new List<ExpressionElement>();
 
@@ -182,11 +240,11 @@ namespace LabToTex.Expressions.Parsers
                 {
                     ExpressionElement element;
 
-                    if (MatlabSpecification.IsOperator(currentPart))
+                    if (specification.IsOperator(currentPart))
                     {
                         OperatorType type = OperatorType.Binary;
 
-                        if (MatlabSpecification.IsUnaryOperator(currentPart))
+                        if (specification.IsUnaryOperator(currentPart))
                             type = OperatorType.Unary;
                         else if ( i == 0 || expressionParts.Last() is ExpressionOperatorElement)
                             type = OperatorType.BinaryAsUnary;
@@ -197,36 +255,36 @@ namespace LabToTex.Expressions.Parsers
                             Type = type
                         };
                     }
-                    else if (MatlabSpecification.IsValue(currentPart))
+                    else if (specification.IsValue(currentPart))
                     {
                         element = new ExpressionValueElement
                         {
                             Value = decimal.Parse(currentPart)
                         };
                     }
-                    else if (MatlabSpecification.IsVariable(currentPart))
+                    else if (specification.IsVariable(currentPart))
                     {
                         element = new ExpressionVariableElement
                         {
                             Name = currentPart
                         };
                     }
-                    else if (MatlabSpecification.IsAssignmentOperator(currentPart))
+                    else if (specification.IsAssignmentOperator(currentPart))
                     {
                         element = new ExpressionAssignmentOperatorElement();
                     }
-                    else if (MatlabSpecification.IsArrayOperator(currentPart))
+                    else if (specification.IsArrayOperator(currentPart))
                     {
                         element = new ExpressionArrayDeclarationElement();
                     }
-                    else if (MatlabSpecification.IsParenthesisOperators(currentPart))
+                    else if (specification.IsParenthesisOperators(currentPart))
                     {
                         element = new ExpressionParenthesisElement
                         {
-                            Type = MatlabSpecification.GetParenthesisType(currentPart)
+                            Type = specification.GetParenthesisType(currentPart)
                         };
                     }
-                    else if (MatlabSpecification.IsEndStatement(currentPart))
+                    else if (specification.IsEndStatement(currentPart))
                     {
                         element = new ExpressionEndStatementElement();
                     }

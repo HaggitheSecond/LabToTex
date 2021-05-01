@@ -11,8 +11,8 @@ namespace LabToTex.Parsers
     {
         public void Parse(string sourceFilePath, string targetFilePath, string texTemplateFilePath)
         {
-            var expressions = new MatlabToExpressionParser().ParseToExpression(File.ReadAllLines(sourceFilePath).ToList());
-            new LatexWriter().WriteFile(targetFilePath, texTemplateFilePath, expressions);       
+            var expressionFile = new MatlabToExpressionParser().ParseToExpression(File.ReadAllLines(sourceFilePath).ToList());
+            new LatexWriter().WriteFile(targetFilePath, texTemplateFilePath, expressionFile);       
         }
     }
 }
