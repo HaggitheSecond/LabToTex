@@ -12,10 +12,5 @@ namespace LabToTex.Expressions.Elements
         {
             return base.ToString() + " -- Exception: " + this.Exception.Message;
         }
-
-        public override IEnumerable<ExpressionElement> GetChildren()
-        {
-            return this.Children;
-        }
     }
 }

@@ -207,17 +207,39 @@ namespace LabToTex.Expressions.Parsers
 
         private void SetParentAndLineReference(ExpressionElement element, int lineReference, ExpressionElement parent = null)
         {
-            if (element == null)
+            if (element == null || element.Parent != null)
                 return;
 
             if (parent != null)
                 element.Parent = parent;
 
             element.LineReference = lineReference;
+            var type = element.GetType();
 
-            foreach (var currentChild in element.GetChildren())
+            foreach (var currentProperty in type.GetProperties())
             {
-                this.SetParentAndLineReference(currentChild, lineReference, element);
+                if (currentProperty.Name == nameof(element.Parent))
+                    continue;
+
+                if(currentProperty.PropertyType == typeof(ExpressionElement) || currentProperty.PropertyType.BaseType == typeof(ExpressionElement))
+                {
+                    this.SetParentAndLineReference((ExpressionElement)currentProperty.GetValue(element), lineReference, element);
+                }
+
+                if(currentProperty.PropertyType.IsGenericType && currentProperty.PropertyType.GetGenericTypeDefinition() == typeof(List<>))
+                {
+                    var listType = currentProperty.PropertyType.GetGenericArguments()[0]; 
+
+                    if(listType.BaseType == typeof(ExpressionElement))
+                    {
+                        var value = (currentProperty.GetValue(element) as IEnumerable<object>).Cast<object>().ToList();
+
+                        foreach (var currentItem in value)
+                        {
+                            this.SetParentAndLineReference((ExpressionElement)currentItem, lineReference, element);
+                        }
+                    }
+                }
             }
         }
 

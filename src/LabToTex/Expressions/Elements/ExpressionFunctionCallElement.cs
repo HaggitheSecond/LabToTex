@@ -7,10 +7,5 @@ namespace LabToTex.Expressions.Elements
         public List<ExpressionElement> Parameters { get; set; }
 
         public ExpressionAnnoynmousFunctionElement Function { get; set; }
-
-        public override IEnumerable<ExpressionElement> GetChildren()
-        {
-            return this.Parameters;
-        }
     }
 }

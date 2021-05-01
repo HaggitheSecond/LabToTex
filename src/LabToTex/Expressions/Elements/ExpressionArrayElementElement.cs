@@ -7,11 +7,6 @@ namespace LabToTex.Expressions.Elements
         public ExpressionElement Value { get; set; }
 
         public ArrayIndex Index { get; set; }
-
-        public override IEnumerable<ExpressionElement> GetChildren()
-        {
-            yield return this.Value;
-        }
     }
 
     public class ArrayIndex

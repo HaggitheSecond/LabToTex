@@ -10,11 +10,6 @@ namespace LabToTex.Expressions.Elements
 
         public ExpressionElement Parent { get; set; }
 
-        public virtual IEnumerable<ExpressionElement> GetChildren()
-        {
-            return new List<ExpressionElement>();
-        }
-
         public override string ToString()
         {
             return this.RawValue;

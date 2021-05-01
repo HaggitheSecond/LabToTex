@@ -7,10 +7,5 @@ namespace LabToTex.Expressions.Elements
         public ExpressionVariableElement Name { get; set; }
 
         public ArrayIndex Index { get; set; }
-
-        public override IEnumerable<ExpressionElement> GetChildren()
-        {
-            yield return this.Name;
-        }
     }
 }
