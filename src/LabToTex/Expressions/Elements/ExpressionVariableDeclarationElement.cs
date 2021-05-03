@@ -7,5 +7,14 @@ namespace LabToTex.Expressions.Elements
         public ExpressionVariableElement Name { get; set; }
 
         public ExpressionElement ValueExpression { get; set; }
+
+        public ExpressionVariableDeclarationType Type { get; set; }
+    }
+
+    public enum ExpressionVariableDeclarationType
+    {
+        Unknown,
+        ArrayDeclaration,
+        AnnonymousFunction
     }
 }

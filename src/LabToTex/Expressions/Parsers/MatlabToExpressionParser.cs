@@ -9,10 +9,17 @@ namespace LabToTex.Expressions.Parsers
 
     public partial class MatlabToExpressionParser
     {
+        private ExpressionFile _expressionFile;
+
         public ExpressionFile ParseToExpression(List<string> rawLines)
         {
             var matLabSpecification = new MatlabSpecification();
             var labToTextSpecification = new LabToTextSpecification();
+
+            this._expressionFile = new ExpressionFile
+            {
+                Expressions = new List<ExpressionElement>()
+            };
 
             var lines = this.ConvertToLines(rawLines);
 
@@ -22,10 +29,7 @@ namespace LabToTex.Expressions.Parsers
             var labToTextDeclarationParser = new LabToTextDeclarationsParser();
             labToTextDeclarationParser.ParseDeclarations(expressions, declarationLines, labToTextSpecification);
 
-            return new ExpressionFile
-            {
-                Expressions = expressions
-            };
+            return this._expressionFile;
         }
 
         private (List<Line> declarationLines, List<Line> otherLines) ExtractDeclarationLines(List<Line> lines, LabToTextSpecification specification)
@@ -168,7 +172,7 @@ namespace LabToTex.Expressions.Parsers
 
                 if (expressionParts.Count == 1)
                 {
-                    element = new ExpressionElement
+                    element = new ExpressionUnknownElement
                     {
                         RawValue = expressionParts.First().RawValue
                     };
@@ -181,20 +185,27 @@ namespace LabToTex.Expressions.Parsers
                         RawValue = line.Value
                     };
 
-                    variableElement.Parent = variableDeclaration;
-
                     if (expressionParts[2] is ExpressionArrayDeclarationElement)
-                        variableDeclaration.ValueExpression = this.ParseArrayDeclaration(expressionParts.Skip(2).ToList());
+                    {
+                        variableDeclaration.Type = ExpressionVariableDeclarationType.ArrayDeclaration;
+                        variableDeclaration.ValueExpression = this.ParseArrayDeclaration(expressionParts.Skip(2).ToList(), variableDeclaration);
+                    }
                     else if (expressionParts[2] is ExpressionAnnoynmousFunctionElement)
-                        variableDeclaration.ValueExpression = this.AnnoynmousFunction(expressionParts.Skip(2).ToList());
+                    {
+                        variableDeclaration.Type = ExpressionVariableDeclarationType.AnnonymousFunction;
+                        variableDeclaration.ValueExpression = this.ParseAnnoynmousFunction(expressionParts.Skip(2).ToList(), variableDeclaration);
+                    }
                     else
-                        variableDeclaration.ValueExpression = this.ParseTerm(expressionParts.Skip(2).ToList());
+                    {
+                        variableDeclaration.Type = ExpressionVariableDeclarationType.Unknown;
+                        variableDeclaration.ValueExpression = this.ParseTerm(expressionParts.Skip(2).ToList(), variableDeclaration);
+                    }
 
                     element = variableDeclaration;
                 }
                 else
                 {
-                    element = new ExpressionElement
+                    element = new ExpressionUnknownElement
                     {
                         RawValue = string.Join(" ", expressionParts.Select(f => f.RawValue))
                     };
@@ -202,6 +213,7 @@ namespace LabToTex.Expressions.Parsers
             }
 
             this.SetParentAndLineReference(element, line.Index);
+            this._expressionFile.Expressions.Add(element);
             return element;
         }
 
@@ -210,10 +222,8 @@ namespace LabToTex.Expressions.Parsers
             if (element == null || element.Parent != null)
                 return;
 
-            if (parent != null)
-                element.Parent = parent;
-
             element.LineReference = lineReference;
+            element.Parent = parent;
             var type = element.GetType();
 
             foreach (var currentProperty in type.GetProperties())
@@ -221,16 +231,16 @@ namespace LabToTex.Expressions.Parsers
                 if (currentProperty.Name == nameof(element.Parent))
                     continue;
 
-                if(currentProperty.PropertyType == typeof(ExpressionElement) || currentProperty.PropertyType.BaseType == typeof(ExpressionElement))
+                if (currentProperty.PropertyType == typeof(ExpressionElement) || currentProperty.PropertyType.BaseType == typeof(ExpressionElement))
                 {
                     this.SetParentAndLineReference((ExpressionElement)currentProperty.GetValue(element), lineReference, element);
                 }
 
-                if(currentProperty.PropertyType.IsGenericType && currentProperty.PropertyType.GetGenericTypeDefinition() == typeof(List<>))
+                if (currentProperty.PropertyType.IsGenericType && currentProperty.PropertyType.GetGenericTypeDefinition() == typeof(List<>))
                 {
-                    var listType = currentProperty.PropertyType.GetGenericArguments()[0]; 
+                    var listType = currentProperty.PropertyType.GetGenericArguments()[0];
 
-                    if(listType.BaseType == typeof(ExpressionElement))
+                    if (listType == typeof(ExpressionElement) || listType.BaseType == typeof(ExpressionElement))
                     {
                         var value = (currentProperty.GetValue(element) as IEnumerable<object>).Cast<object>().ToList();
 
@@ -264,7 +274,7 @@ namespace LabToTex.Expressions.Parsers
 
                         if (specification.IsUnaryOperator(currentPart))
                             type = OperatorType.Unary;
-                        else if ( i == 0 || expressionParts.Last() is ExpressionOperatorElement)
+                        else if (i == 0 || expressionParts.Last() is ExpressionOperatorElement)
                             type = OperatorType.BinaryAsUnary;
 
                         element = new ExpressionOperatorElement
@@ -306,9 +316,13 @@ namespace LabToTex.Expressions.Parsers
                     {
                         element = new ExpressionEndStatementElement();
                     }
-                    else if(specification.IsAnnoymousFunction(currentPart))
+                    else if (specification.IsAnnoymousFunction(currentPart))
                     {
                         element = new ExpressionAnnoynmousFunctionElement();
+                    }
+                    else if (specification.IsSeparator(currentPart))
+                    {
+                        element = new ExpressionSeparatorElement();
                     }
                     else
                     {
@@ -332,7 +346,7 @@ namespace LabToTex.Expressions.Parsers
             return expressionParts;
         }
 
-        private ExpressionElement ParseArrayDeclaration(IList<ExpressionElement> expressionElements)
+        private ExpressionElement ParseArrayDeclaration(IList<ExpressionElement> expressionElements, ExpressionVariableDeclarationElement variableDeclaration)
         {
             expressionElements.RemoveAt(0);
             expressionElements.RemoveAt(expressionElements.Count - 1);
@@ -370,11 +384,12 @@ namespace LabToTex.Expressions.Parsers
             return new ExpressionArrayDeclarationElement
             {
                 RawValue = string.Join(", ", expressionElements),
-                Elements = elements
+                Elements = elements,
+                IsSealed = true
             };
         }
 
-        private ExpressionElement AnnoynmousFunction(List<ExpressionElement> expressionElements)
+        private ExpressionElement ParseAnnoynmousFunction(List<ExpressionElement> expressionElements, ExpressionVariableDeclarationElement variableDeclaration)
         {
             // remove leading @ and (
             expressionElements.RemoveAt(0);
@@ -387,86 +402,69 @@ namespace LabToTex.Expressions.Parsers
                 expressionElements.Remove(current);
             expressionElements.Remove(closingParenthesis);
 
-            return new ExpressionAnnoynmousFunctionElement()
+            var element = new ExpressionAnnoynmousFunctionElement()
             {
                 Parameters = innerElements.OfType<ExpressionVariableElement>().ToList(),
-                Expression = this.ParseTerm(expressionElements)
             };
-         }
 
-        private ExpressionElement ParseTerm(IList<ExpressionElement> expressionParts)
+            // fill valuexpression with its paramters first so we can work with it while parsing the actual term
+            variableDeclaration.ValueExpression = element;
+            element.Expression = this.ParseTerm(expressionElements, variableDeclaration);
+            element.IsSealed = true;
+            return element;
+        }
+
+        private ExpressionElement ParseTerm(List<ExpressionElement> expressionElements, ExpressionVariableDeclarationElement variableDeclaration)
         {
             try
             {
                 ExpressionElement element;
 
-                if (expressionParts.Count == 1 && (expressionParts[0] is ExpressionValueElement || expressionParts[0] is ExpressionVariableElement))
+                if (expressionElements.Count == 1 && (expressionElements[0] is ExpressionValueElement || expressionElements[0] is ExpressionVariableElement))
                 {
-                    element = expressionParts.First();
+                    element = expressionElements.First();
                 }
                 else
                 {
-                    var workInProgressExpressionParts = expressionParts.ToList();
+                    var workInProgressExpressionElements = expressionElements.ToList();
 
                     // first pass
                     // collapse paranthesis
                     var i = 0;
                     while (true)
                     {
-                        var currentElement = workInProgressExpressionParts.ElementAtOrDefault(i);
+                        var currentElement = workInProgressExpressionElements.ElementAtOrDefault(i);
 
                         if (currentElement == null)
                             break;
 
                         if (currentElement is ExpressionParenthesisElement paranthesisElement)
                         {
-                            var closingParenthesis = this.FindClosingParenthesis(workInProgressExpressionParts.Skip(i).ToList());
-                            var innerElements = workInProgressExpressionParts.Skip(i + 1).TakeWhile(f => object.ReferenceEquals(f, closingParenthesis) == false).ToList();
+                            var closingParenthesis = this.FindClosingParenthesis(workInProgressExpressionElements.Skip(i).ToList());
+                            var innerExpressions = workInProgressExpressionElements.Skip(i + 1).TakeWhile(f => object.ReferenceEquals(f, closingParenthesis) == false).ToList();
 
-                            var previousElement = workInProgressExpressionParts.ElementAtOrDefault(i - 1);
+                            var previousElement = workInProgressExpressionElements.ElementAtOrDefault(i - 1);
                             ExpressionElement innerExpression;
 
                             if (previousElement == null || !(previousElement is ExpressionVariableElement))
                             {
-                                innerExpression = this.ParseTerm(innerElements);
+                                innerExpression = this.ParseTerm(innerExpressions, variableDeclaration);
                             }
                             else
                             {
-                                var xIndex = 0;
-                                var xIndexElement = innerElements.ElementAtOrDefault(0);
-
-                                if (xIndexElement != null && int.TryParse(xIndexElement.RawValue, out var xIndexOut))
-                                    xIndex = xIndexOut;
-
-                                int? yIndex = null;
-                                var yIndexElement = innerElements.ElementAtOrDefault(1);
-
-                                if (yIndexElement != null && int.TryParse(yIndexElement.RawValue, out var yIndexOut))
-                                    yIndex = yIndexOut;
-
-                                innerExpression = new ExpressionArrayAccesorElement()
-                                {
-                                    RawValue = $"{previousElement}({string.Join(",", innerElements)})",
-                                    Name = previousElement as ExpressionVariableElement,
-                                    Index = new ArrayIndex
-                                    {
-                                        XIndex = xIndex,
-                                        YIndex = yIndex
-                                    }
-                                };
-
-                                workInProgressExpressionParts.Remove(previousElement);
+                                innerExpression = this.ParseFunctionCall(innerExpressions, (ExpressionVariableElement)previousElement, variableDeclaration);
+                                workInProgressExpressionElements.Remove(previousElement);
                                 i--;
                             }
 
-                            workInProgressExpressionParts.Remove(paranthesisElement);
+                            workInProgressExpressionElements.Remove(paranthesisElement);
 
-                            foreach (var currentInnerElement in innerElements)
-                                workInProgressExpressionParts.Remove(currentInnerElement);
+                            foreach (var currentInnerElement in innerExpressions)
+                                workInProgressExpressionElements.Remove(currentInnerElement);
 
-                            workInProgressExpressionParts.Remove(closingParenthesis);
+                            workInProgressExpressionElements.Remove(closingParenthesis);
 
-                            workInProgressExpressionParts.Insert(i, innerExpression);
+                            workInProgressExpressionElements.Insert(i, innerExpression);
                         }
 
                         i++;
@@ -477,17 +475,17 @@ namespace LabToTex.Expressions.Parsers
                     i = 0;
                     while (true)
                     {
-                        var currentElement = workInProgressExpressionParts.ElementAtOrDefault(i);
+                        var currentElement = workInProgressExpressionElements.ElementAtOrDefault(i);
 
                         if (currentElement == null)
                             break;
 
                         if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.Type == OperatorType.Unary)
                         {
-                            var element1 = workInProgressExpressionParts.ElementAt(i + 1);
+                            var element1 = workInProgressExpressionElements.ElementAt(i + 1);
 
                             operatorExpression.Operand1 = element1;
-                            workInProgressExpressionParts.Remove(operatorExpression.Operand1);
+                            workInProgressExpressionElements.Remove(operatorExpression.Operand1);
 
                             operatorExpression.IsSealed = true;
                         }
@@ -497,32 +495,32 @@ namespace LabToTex.Expressions.Parsers
 
                     // third pass 
                     // handle binary operators
-                    i = workInProgressExpressionParts.Count - 1;
+                    i = workInProgressExpressionElements.Count - 1;
                     while (true)
                     {
-                        var currentElement = workInProgressExpressionParts.ElementAtOrDefault(i);
+                        var currentElement = workInProgressExpressionElements.ElementAtOrDefault(i);
 
                         if (currentElement == null)
                             break;
 
                         if (currentElement is ExpressionOperatorElement operatorExpression && operatorExpression.IsSealed == false && operatorExpression.Type != OperatorType.Unary)
                         {
-                            var element1 = workInProgressExpressionParts.ElementAtOrDefault(i - 1);
-                            var element2 = workInProgressExpressionParts.ElementAtOrDefault(i + 1);
+                            var element1 = workInProgressExpressionElements.ElementAtOrDefault(i - 1);
+                            var element2 = workInProgressExpressionElements.ElementAtOrDefault(i + 1);
 
                             if (operatorExpression.Type == OperatorType.BinaryAsUnary)
                             {
                                 operatorExpression.Operand1 = element2;
 
-                                workInProgressExpressionParts.Remove(operatorExpression.Operand1);
+                                workInProgressExpressionElements.Remove(operatorExpression.Operand1);
                             }
                             else
                             {
                                 operatorExpression.Operand1 = element1;
                                 operatorExpression.Operand2 = element2;
 
-                                workInProgressExpressionParts.Remove(operatorExpression.Operand1);
-                                workInProgressExpressionParts.Remove(operatorExpression.Operand2);
+                                workInProgressExpressionElements.Remove(operatorExpression.Operand1);
+                                workInProgressExpressionElements.Remove(operatorExpression.Operand2);
                             }
 
                             operatorExpression.IsSealed = true;
@@ -531,10 +529,10 @@ namespace LabToTex.Expressions.Parsers
                         i--;
                     }
 
-                    if (workInProgressExpressionParts.Count != 1)
+                    if (workInProgressExpressionElements.Count != 1)
                         throw new Exception("Expression could not be reduced to a single element");
 
-                    element = workInProgressExpressionParts.First();
+                    element = workInProgressExpressionElements.First();
                 }
 
                 return element;
@@ -544,8 +542,109 @@ namespace LabToTex.Expressions.Parsers
                 return new ExpressionErrorElement()
                 {
                     Exception = e,
-                    Children = expressionParts.ToList()
+                    Children = expressionElements.ToList()
                 };
+            }
+        }
+
+        private ExpressionElement ParseFunctionCall(List<ExpressionElement> expressionElements, ExpressionVariableElement nameElement, ExpressionVariableDeclarationElement variableDeclaration)
+        {
+            // collapse all parameters separated by ExpressionSeparatorElement
+            var parameters = new List<ExpressionElement>();
+            List<ExpressionElement> currentParameterParts = null;
+            var i = 0;
+            while (true)
+            {
+                var currentElement = expressionElements.ElementAtOrDefault(i);
+
+                if (currentElement == null)
+                {
+                    parameters.Add(this.ParseTerm(currentParameterParts, variableDeclaration));
+                    break;
+                }
+
+                if (currentElement is ExpressionSeparatorElement)
+                {
+                    if (currentParameterParts != null)
+                    {
+                        parameters.Add(this.ParseTerm(currentParameterParts, variableDeclaration));
+                    }
+                    currentParameterParts = new List<ExpressionElement>();
+                }
+                else if (currentParameterParts == null)
+                {
+                    currentParameterParts = new List<ExpressionElement>
+                    {
+                        currentElement
+                    };
+                }
+                else
+                {
+                    currentParameterParts.Add(currentElement);
+                }
+
+                i++;
+            }
+
+            var referencedElement = this._expressionFile.TryFindVariableDeclarationByName(nameElement.Name) ?? variableDeclaration;
+
+            switch (referencedElement.Type)
+            {
+                case ExpressionVariableDeclarationType.Unknown:
+                    {
+                        return new ExpressionUnknownElement
+                        {
+                            RawValue = $"{nameElement.Name}({string.Join("", expressionElements.Select(f => f.RawValue))})"
+                        };
+                    }
+                case ExpressionVariableDeclarationType.ArrayDeclaration:
+                    {
+                        return new ExpressionArrayAccesorElement()
+                        {
+                            RawValue = $"{nameElement}({string.Join(",", parameters)})",
+                            Name = nameElement,
+                            Indexes = new List<ExpressionElement>(parameters)
+                        };
+                    }
+                case ExpressionVariableDeclarationType.AnnonymousFunction:
+                    {
+                        var valueExpression = (ExpressionAnnoynmousFunctionElement)referencedElement.ValueExpression;
+
+                        if (variableDeclaration.IsSealed)
+                        {
+                            return new ExpressionFunctionCallElement
+                            {
+                                RawValue = $"@({string.Join(",", parameters)})",
+                                Function = valueExpression,
+                                Parameters = new List<ExpressionElement>(parameters)
+                            };
+                        }
+                        else
+                        {
+                            var matchingParameter = valueExpression.Parameters.FirstOrDefault(f => f.Name == nameElement.Name);
+
+                            if (matchingParameter != null)
+                            {
+                                return new ExpressionArrayAccesorElement()
+                                {
+                                    RawValue = $"{nameElement}({string.Join(",", parameters)})",
+                                    Name = nameElement,
+                                    Indexes = new List<ExpressionElement>(parameters)
+                                };
+                            }
+                            else
+                            {
+                                return new ExpressionFunctionCallElement
+                                {
+                                    RawValue = $"@({string.Join(",", parameters)})",
+                                    Function = valueExpression,
+                                    Parameters = new List<ExpressionElement>(parameters)
+                                };
+                            }
+                        }
+                    }
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 

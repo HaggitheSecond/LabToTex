@@ -6,6 +6,6 @@ namespace LabToTex.Expressions.Elements
     {
         public ExpressionVariableElement Name { get; set; }
 
-        public ArrayIndex Index { get; set; }
+        public List<ExpressionElement> Indexes { get; set; }
     }
 }

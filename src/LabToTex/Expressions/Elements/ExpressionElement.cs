@@ -2,7 +2,7 @@
 
 namespace LabToTex.Expressions.Elements
 {
-    public class ExpressionElement
+    public abstract class ExpressionElement
     {
         public virtual string RawValue { get; set; } = "";
         public int LineReference { get; set; }
@@ -12,7 +12,7 @@ namespace LabToTex.Expressions.Elements
 
         public override string ToString()
         {
-            return this.RawValue;
+            return this.RawValue + " | " + this.GetType();
         }
     }
 }

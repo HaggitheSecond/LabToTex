@@ -9,7 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{7004C2AF-BCC
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{00D82563-9903-475D-9C38-6C45DBC78BB2}"
 	ProjectSection(SolutionItems) = preProject
-		docs\todo.txt = docs\todo.txt
+		docs\todo.md = docs\todo.md
 	EndProjectSection
 EndProject
 Global
