@@ -102,7 +102,7 @@ namespace LabToTex.Writer
             {
                 var expression = functionCallElement.Function.Expression;
 
-                this.ReplaceParameters(expression, functionCallElement.Parameters, functionCallElement.Function.Parameters.OfType<ExpressionVariableElement>().ToList());
+                this.ReplaceParametersInOperatorElement(expression, functionCallElement.Parameters, functionCallElement.Function.Parameters.OfType<ExpressionVariableElement>().ToList());
 
                 return this.WriteExpression(expression, specification, labtotexspecification);
             }
@@ -114,7 +114,7 @@ namespace LabToTex.Writer
             }
         }
 
-        private void ReplaceParameters(ExpressionElement element, List<ExpressionElement> parameters, List<ExpressionVariableElement> functionParamters)
+        private void ReplaceParametersInOperatorElement(ExpressionElement element, List<ExpressionElement> parameters, List<ExpressionVariableElement> functionParamters)
         {
             if (!(element is ExpressionOperatorElement operatorElement))            
                 return;
@@ -123,10 +123,7 @@ namespace LabToTex.Writer
             {
                 if (operatorElement.Operand1 is ExpressionVariableElement expressionVariable)
                 {
-                    var templateParameter = functionParamters.FirstOrDefault(f => f.Name == expressionVariable.Name);
-                    var templateParameterIndex = functionParamters.IndexOf(templateParameter);
-                    var parameter = parameters.ElementAtOrDefault(templateParameterIndex);
-
+                    var parameter = TryGetParameterForName(expressionVariable.Name);
                     if (parameter != null)
                     {
                         operatorElement.Operand1 = parameter;
@@ -134,11 +131,15 @@ namespace LabToTex.Writer
                 }
                 else if (operatorElement.Operand1 is ExpressionArrayAccesorElement arrayAccesorElement)
                 {
-
+                    var parameter = TryGetParameterForName(arrayAccesorElement.Name.Name);
+                    if (parameter != null)
+                    {
+                        operatorElement.Operand1 = parameter;
+                    }
                 }
                 else
                 {
-                    this.ReplaceParameters(operatorElement.Operand1, parameters, functionParamters);
+                    this.ReplaceParametersInOperatorElement(operatorElement.Operand1, parameters, functionParamters);
                 }
             }
 
@@ -146,10 +147,7 @@ namespace LabToTex.Writer
             {
                 if (operatorElement.Operand2 is ExpressionVariableElement expressionVariable)
                 {
-                    var templateParameter = functionParamters.FirstOrDefault(f => f.Name == expressionVariable.Name);
-                    var templateParameterIndex = functionParamters.IndexOf(templateParameter);
-                    var parameter = parameters.ElementAtOrDefault(templateParameterIndex);
-
+                    var parameter = TryGetParameterForName(expressionVariable.Name);
                     if (parameter != null)
                     {
                         operatorElement.Operand2 = parameter;
@@ -157,19 +155,31 @@ namespace LabToTex.Writer
                 }
                 else if (operatorElement.Operand2 is ExpressionArrayAccesorElement arrayAccesorElement)
                 {
-
+                    var parameter = TryGetParameterForName(arrayAccesorElement.Name.Name);
+                    if (parameter != null)
+                    {
+                        operatorElement.Operand1 = parameter;
+                    }
                 }
                 else
                 {
-                    this.ReplaceParameters(operatorElement.Operand2, parameters, functionParamters);
+                    this.ReplaceParametersInOperatorElement(operatorElement.Operand2, parameters, functionParamters);
                 }
+            }
+
+            ExpressionElement TryGetParameterForName(string name)
+            {
+                var templateParameter = functionParamters.FirstOrDefault(f => f.Name == name);
+                var templateParameterIndex = functionParamters.IndexOf(templateParameter);
+                var parameter = parameters.ElementAtOrDefault(templateParameterIndex);
+
+                return parameter;
             }
         }
 
         private string WriteExpressionArrayElementElement(ExpressionArrayElementElement arrayElementElement, LatexSpecification specification, LabToTextSpecification labtotexspecification)
         {
-
-            return "";
+            return this.WriteExpression(arrayElementElement.Value, specification, labtotexspecification);
         }
 
         private string WriteAnnoynmousFunctionElement(ExpressionAnnoynmousFunctionElement annoynmousFunctionElement, LatexSpecification specification, LabToTextSpecification labtotexspecification)
@@ -214,10 +224,13 @@ namespace LabToTex.Writer
             var operand1 = this.WriteExpression(element.Operand1, specification, labtotexspecification);
             var operand2 = this.WriteExpression(element.Operand2, specification, labtotexspecification);
 
-            if (element.Operator == "/")
-                return string.Format("\\frac{{{0}}}{{{1}}}", operand1, operand2);
-
             var @operator = element.Operator;
+
+            if (@operator == "sqrt")
+                return string.Format("\\sqrt{{{0}}}", operand1);
+
+            if (@operator == "/")
+                return string.Format("\\frac{{{0}}}{{{1}}}", operand1, operand2);
 
             if (@operator == "*")
                 @operator = specification.DesiredMultiplication;

@@ -13,7 +13,7 @@ namespace LabToTex
 
             var doMultiple = false;
 
-            var filetouse = 1;
+            var filetouse = 0;
             var files = new List<string>
             {
                 @"C:\Users\haggi\Documents\Uni\semester 2\Messtechnik\Übung 1\e_1.m",
